@@ -1,7 +1,6 @@
-patch.diff
-output.docx
-稳定币学习.docx
+
 .DS_Store
 ~*
-稳定币学习.pdf
-reference.docx
+output/*
+.gitignore
+output/*
