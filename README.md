@@ -5,7 +5,7 @@
 - pandoc (with Lua filter support) + Chrome: Pandoc’s headless diagram rendering relies on Chrome via Puppeteer. First make sure Google Chrome is installed system-wide, then export `PUPPETEER_EXECUTABLE_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"` before running the script.
 - python3: used post-processing to inline the CSS file and inject the `img{max-width:100%;height:auto;}` safeguard.
 - Coreutils (cp, mkdir, cd) that ship with macOS or GNU environments.
-- Google Chrome: the binary referenced by `PUPPETEER_EXECUTABLE_PATH`.
+- Google Chrome: required twice—Puppeteer filters need it, and PDF exports rely on Chrome headless (`--headless --print-to-pdf`) rather than XeLaTeX.
 
 ### File-level dependencies
 - `render/github-markdown.css`: provides GitHub-style Markdown theming; automatically staged into `output/media` and inlined into the generated HTML head during the build.
@@ -20,7 +20,9 @@
 4. Post-process the generated HTML via Python:
 	- Inline the copied CSS (replacing the `<link>` tag when present, otherwise appending to `<head>`).
 	- Ensure the `<style>img{max-width:100%;height:auto;}</style>` block exists once inside the document.
-5. Open the resulting HTML via the default system handler (`open`).
+5. For `.pdf` targets, call headless Chrome (with `--print-to-pdf-no-header --no-pdf-header-footer`) to “print” the generated HTML into a PDF file, reusing the same Chrome binary referenced by `PUPPETEER_EXECUTABLE_PATH`.
+6. Word (`.docx` / `.doc`) exports are no longer supported; the script exits with an error if requested.
+7. Open the resulting artifact via the default system handler (`open`).
 
 ### Usage
 ```sh
@@ -45,7 +47,7 @@ Arguments:
 - pandoc（带 Lua filter 支持）+ Chrome：Pandoc 的无头图表渲染依赖 Chrome 与 Puppeteer。请先确认系统已安装 Google Chrome，再设置 `export PUPPETEER_EXECUTABLE_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"`。
 - python3：在 Pandoc 之后对 HTML 做二次处理，完成 CSS 内联和图片宽度限制。
 - Coreutils：macOS/GNU 环境自带的 `cp`、`mkdir`、`cd` 等基础命令。
-- Google Chrome：由 `PUPPETEER_EXECUTABLE_PATH` 指向的可执行文件。
+- Google Chrome：由 `PUPPETEER_EXECUTABLE_PATH` 指向的可执行文件，同时承担 PDF 导出时的 headless 渲染（`--headless --print-to-pdf`），不再依赖 XeLaTeX。
 
 ### 文件级依赖
 - `render/github-markdown.css`：提供 GitHub 风格的 Markdown 样式，会被自动复制到 `output/media` 并最终内联到 HTML `<head>` 中。
@@ -60,7 +62,9 @@ Arguments:
 4. 使用 Python 做后处理：
 	- 将复制过来的 CSS 内联到 HTML 头部（若存在 `<link>` 则替换，没有就追加）。
 	- 确保文档中只存在一次 `<style>img{max-width:100%;height:auto;}</style>` 以限制图片宽度。
-5. 通过 macOS `open` 命令自动打开最终 HTML。
+5. 当目标扩展名为 `.pdf` 时，调用 Chrome headless 将上述 HTML “打印”成 PDF（附带 `--print-to-pdf-no-header --no-pdf-header-footer`，移除页眉/页脚）。
+6. Word（`.docx`/`.doc`）导出功能现已移除，如请求该格式脚本会直接报错退出。
+7. 最后通过 macOS `open` 命令打开生成的文件。
 
 ### 用法示例
 ```sh
