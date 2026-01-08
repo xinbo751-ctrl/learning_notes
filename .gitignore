@@ -1,6 +1,15 @@
-
 .DS_Store
 ~*
-output/*
+filings/*
 .gitignore
+__pycache__/*
+__pycache__/
+*.py[cod]
+*$py.class
 output/*
+output/
+.venv/*
+.venv/
+tests/screen/*
+TCOM/patch.diff
+TCOM/patch.diff.bak

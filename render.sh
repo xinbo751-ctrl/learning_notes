@@ -37,12 +37,16 @@ OUTPUT_EXT_LOWER=$(printf '%s' "$OUTPUT_EXT" | tr '[:upper:]' '[:lower:]')
 
 IS_HTML_OUTPUT=false
 IS_PDF_OUTPUT=false
+IS_WORD_OUTPUT=false
 case "$OUTPUT_EXT_LOWER" in
 	html|htm)
 		IS_HTML_OUTPUT=true
 		;;
 	pdf)
 		IS_PDF_OUTPUT=true
+		;;
+	docx|doc)
+		IS_WORD_OUTPUT=true
 		;;
 esac
 
@@ -133,6 +137,21 @@ PY
 	)
 }
 
+generate_word_output() {
+	local target_path=$1
+	(
+		cd output
+		pandoc "$INPUT_MD" \
+			--lua-filter=../render/diagram.lua \
+			--extract-media=./media \
+			-f gfm \
+			-s \
+			--embed-resources \
+			--reference-doc=../render/reference.docx \
+			-o "$target_path"
+	)
+}
+
 generate_generic_output() {
 	local target_path=$1
 	(
@@ -142,6 +161,7 @@ generate_generic_output() {
 			--extract-media=./media \
 			-f gfm \
 			-s \
+			--embed-resources \
 			--css=./media/github-markdown.css \
 			-o "$target_path"
 	)
@@ -237,6 +257,8 @@ if [ "$IS_PDF_OUTPUT" = true ]; then
 	convert_html_to_pdf "$HTML_TARGET" "$OUTPUT_PATH"
 elif [ "$IS_HTML_OUTPUT" = true ]; then
 	generate_html_output "$OUTPUT_PATH"
+elif [ "$IS_WORD_OUTPUT" = true ]; then
+	generate_word_output "$OUTPUT_PATH"
 else
 	generate_generic_output "$OUTPUT_PATH"
 fi
