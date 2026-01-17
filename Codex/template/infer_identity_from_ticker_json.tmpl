@@ -1,0 +1,30 @@
+#ASK
+目标：仅根据给定的股票代码（ticker）推断公司名称（company）。
+
+输出必须是 JSON-only，不要输出其它文字。
+
+输出 JSON 结构（字段齐全）：
+{
+  "ticker": "大写股票代码（如 V）",
+  "company": "公司名称（优先中文，若资料仅有英文则用英文；不加多余后缀）",
+  "confidence": "high|medium|low",
+  "basis": ["用于推断的依据要点（简短）"],
+  "base_matches_ticker": null,
+  "mismatch_reason": ""
+}
+
+推断规则：
+- 仅基于下方输入的 ticker 推断公司名称。
+- 不依赖本地材料或文件证据。
+- ticker 输出必须为大写字母/数字的简短代码（不含交易所后缀）。
+
+输入：
+expected_ticker: {{EXPECTED_TICKER}}
+base_packs_location: (none)
+
+materials_manifest:
+Base packs | Location: (none)
+Note: no local materials.
+
+evidence:
+(none)

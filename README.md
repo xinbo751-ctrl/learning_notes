@@ -1,83 +1,273 @@
-## render.sh guide
+# 公司全貌分析加工流程（端到端）
 
-### Runtime dependencies
-- Bash-compatible shell (script shebang is `/bin/bash`, but it also runs fine inside zsh): handles control flow, arithmetic, and heredocs without zsh-specific extensions.
-- pandoc (with Lua filter support) + Chrome: Pandoc’s headless diagram rendering relies on Chrome via Puppeteer. First make sure Google Chrome is installed system-wide, then export `PUPPETEER_EXECUTABLE_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"` before running the script.
-- python3: used post-processing to inline the CSS file and inject the `img{max-width:100%;height:auto;}` safeguard.
-- Coreutils (cp, mkdir, cd) that ship with macOS or GNU environments.
-- Google Chrome: required twice—Puppeteer filters need it, and PDF exports rely on Chrome headless (`--headless --print-to-pdf`) rather than XeLaTeX.
+目标：从 **股票代码** 或 “**原始披露材料**（EDGAR filings / PDF 财报）”加工成一份可追溯的公司全貌梳理 Markdown，并最终一键导出成 HTML / PDF / Word。
 
-### File-level dependencies
-- `render/github-markdown.css`: provides GitHub-style Markdown theming; automatically staged into `output/media` and inlined into the generated HTML head during the build.
-- `render/before.html` and `render/after.html`: HTML fragments Pandoc injects before and after the Markdown body.
-- `render/diagram.lua`: Pandoc Lua filter that enables diagram rendering during the Markdown->HTML conversion.
-- Target Markdown sources: any `.md` file you pass as the first argument.
+两套写作工具：
+1) 网页版（GUIDE 手写）：按 [GUIDE.md](GUIDE.md) 逐章写作 → 用 `render` 导出 HTML/PDF/Word。
+2) Codex CLI 自动写作：准备 filings 或 PDF（可选用 Marker/MinerU 处理成 LLM ready）→ 自动写作 → 用 `render` 导出 HTML/PDF/Word。
 
-### Execution flow
-1. Resolve absolute paths for the input markdown, default output (`output/<stem>.html`), and `output/media` directory.
-2. Copy CSS and HTML fragment assets from `render/` into `output/media` to keep Pandoc references local.
-3. Run Pandoc inside the `output/` directory with `--extract-media` so images land in `output/media`, `--embed-resources` for base64 inlining, the Lua filter, and the before/after fragments.
-4. Post-process the generated HTML via Python:
-	- Inline the copied CSS (replacing the `<link>` tag when present, otherwise appending to `<head>`).
-5. For `.pdf` targets, call headless Chrome (with `--print-to-pdf-no-header --no-pdf-header-footer`) to “print” the generated HTML into a PDF file, reusing the same Chrome binary referenced by `PUPPETEER_EXECUTABLE_PATH`.
-6. Open the generated file with the system's default application.
+> ***Markdown（.md文件）可以用Chrome（需安装Markdown Viewer扩展程序）打开查看，然后用打印成PDF，`render`脚本可不用。***
 
-### Usage
-```sh
-./render.sh path/to/input.md                # writes output/input.html
-./render.sh notes.md custom/output.html     # custom target path
+---
+
+## 快速开始（推荐）
+
+### 路线 A：网页版（GUIDE 手写）
+
+> ***也可不用准备材料，给TICKER就能写作。***
+
+- 获取材料（可选）（任选其一）
+
+  - 美股/SEC：下载 filings  
+  
+  ```bash
+  python utils/fetch_sec_edgar.py --ticker AAPL --form 10-K 10-Q --start 2015 --end 2025
+  ```
+
+  - PDF（财报、公告、电话会议）  
+  可自己从公司IR网站下载PDF。
+
+- 按 [GUIDE.md](GUIDE.md) 逐章写作  
+
+- 用 `render` 导出 HTML/PDF/Word  
+
+```bash
+python utils/render.py Reports/<TICKER>/<公司名>全貌梳理.md
 ```
 
-Arguments:
-- `<input_markdown>` (required): absolute or relative path to the Markdown file to convert.
-- `[output_html]` (optional): target HTML path. Defaults to `output/<input_stem>.html` relative to the repository root.
+### 路线 B：Codex CLI 自动写作
 
-### Operational notes
-- The script must run from within the repo because it relies on relative references to the `render/` folder.
-- Ensure the `output/` directory is writable; it is automatically created along with any parent directories for the HTML file.
-- If Pandoc cannot find `diagram.lua` or the CSS fragments, verify the `render/` folder matches the expected layout.
-- Re-running the script on the same HTML is idempotent: the Python block replaces the previous inline CSS segment rather than duplicating it.
-- To output different formats (e.g., `.pdf`, `.html`, `.docx`), simply specify the desired file extension in the second argument—the script will automatically detect the output format and invoke the appropriate converter.
-- For PDF generation, the script uses Chrome in headless mode to render the HTML into a high-fidelity PDF document, preserving all styles and embedded diagrams.
+#### 获取材料（可选）（任选其一）
 
-## render.sh 指南（简体中文）
+> ***也可不下载任何资料直接用TICKER开始写作，但是速度理论上比下载好材料写作慢*** 
 
-### 运行时依赖
-- Bash 兼容的 shell（脚本 shebang 为 `/bin/bash`，zsh 中也能运行）：负责常规流程控制与 heredoc，不再依赖 zsh 专属语法。
-- pandoc（带 Lua filter 支持）+ Chrome：Pandoc 的无头图表渲染依赖 Chrome 与 Puppeteer。请先确认系统已安装 Google Chrome，再设置 `export PUPPETEER_EXECUTABLE_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"`。
-- python3：在 Pandoc 之后对 HTML 做二次处理，完成 CSS 内联和图片宽度限制。
-- Coreutils：macOS/GNU 环境自带的 `cp`、`mkdir`、`cd` 等基础命令。
-- Google Chrome：由 `PUPPETEER_EXECUTABLE_PATH` 指向的可执行文件，同时承担 PDF 导出时的 headless 渲染（`--headless --print-to-pdf`），不再依赖 XeLaTeX。
-
-### 文件级依赖
-- `render/github-markdown.css`：提供 GitHub 风格的 Markdown 样式，会被自动复制到 `output/media` 并最终内联到 HTML `<head>` 中。
-- `render/before.html` 与 `render/after.html`：Pandoc 在正文前/后插入的 HTML 片段。
-- `render/diagram.lua`：Pandoc Lua 过滤器，用来渲染流程图等图示。
-- 任意 Markdown 源文件：作为脚本的第一个参数传入。
-
-### 执行流程
-1. 解析输入 Markdown、默认输出路径（`output/<stem>.html`）以及 `output/media` 目录的绝对路径。
-2. 将 CSS 和 HTML 片段从 `render/` 复制到 `output/media`，保证 Pandoc 在 `output/` 内运行时能找到它们。
-3. 在 `output/` 目录内调用 Pandoc：开启 `--extract-media`、`--embed-resources`、加载 Lua filter，并注入 before/after 片段。
-4. 使用 Python 做后处理：
-	- 将复制过来的 CSS 内联到 HTML 头部（若存在 `<link>` 则替换，没有就追加）。
-5. 当目标扩展名为 `.pdf` 时，调用 Chrome headless 将上述 HTML “打印”成 PDF（附带 `--print-to-pdf-no-header --no-pdf-header-footer`，移除页眉/页脚）。
-6. 使用系统默认应用程序打开生成的文件。
-
-### 用法示例
-```sh
-./render.sh path/to/input.md                # 输出到 output/input.html
-./render.sh notes.md custom/output.html     # 使用自定义输出路径
+- 美股/SEC：下载 filings
+```bash
+python utils/fetch_sec_edgar.py --ticker AAPL --form 10-K 10-Q --start 2015 --end 2025
 ```
 
-参数说明：
-- `<input_markdown>`（必填）：待转换的 Markdown 文件，支持相对或绝对路径。
-- `[output_html]`（可选）：目标 HTML 路径，默认为 `output/<input_stem>.html`。
+- PDF：可直接用原 PDF，也可用 Marker/MinerU 处理成 LLM ready，建议处理。
 
-### 使用注意
-- 必须在仓库根目录运行脚本，因为其依赖 `render/` 目录的相对路径。
-- 需要确保 `output/` 可写，脚本会自动创建该目录以及输出文件所在的父目录。
-- 若 Pandoc 找不到 `diagram.lua` 或 CSS 片段，请检查 `render/` 目录结构是否完整。
-- 重复运行同一输入是幂等的：Python 会替换已有的 CSS 内联段，避免累积重复内容。
-- 如需输出不同格式（如 `.pdf`、`.html`、`.docx` 等），只需在第二个参数中指定相应的文件扩展名，脚本会自动识别输出格式并调用相应的转换器。
-- 生成 PDF 时，脚本使用 Chrome 将 HTML 渲染为高保真的 PDF 文档，完整保留所有样式和嵌入的图表。
+#### 自动写作（Codex CLI）
+
+从[GUIDE.md](GUIDE.md) 生成prompts：
+```bash
+python utils/sync_codex_from_guide.py
+```
+
+用TICKER自动写作：
+```bash
+python utils/run_qual_report_codex.py --ticker <TICKER>
+```
+
+用本机材料自动写作：
+```bash
+python utils/run_qual_report_codex.py --base filings/<TICKER>
+```
+
+#### 用 `render` 导出 HTML/PDF/Word  
+
+```bash
+python utils/render.py Reports/<TICKER>/<公司名>全貌梳理.md
+```
+
+---
+
+## 目录约定（你会看到的产物在哪里）
+
+- `filings/`：SEC EDGAR 下载的原始 filing（iXBRL HTML + XBRL 实例与 taxonomy）。
+- `output/`：各类脚本的输出目录（渲染后的 HTML/PDF/Word、marker 输出、媒体资源等）。
+- `render/`：Pandoc 渲染模板资源（CSS、before/after 片段、Lua filter）。
+- `Reports/`：你写作/自动化生成的最终产物（建议用股票代码做目录名：`Reports/<TICKER>/...`）。
+
+---
+
+## 路径 A：网页版（GUIDE 手写）
+
+### 获取材料
+
+可选两类材料来源：
+- 美股/SEC：下载 filings（见【脚本参数说明】`fetch_sec_edgar`）
+- PDF：可直接用原 PDF 作为材料
+
+### 按 GUIDE 逐章写作
+
+写作流程与“对话协议”在 [GUIDE.md](GUIDE.md)。推荐顺序：
+1) 新对话中粘贴 [GUIDE.md](GUIDE.md) 的“开场必发：协议注入 + 全局硬约束”。
+2) 上传《定性分析模板.md》与材料。
+3) 用 `#WRITE` 从“公司介绍与沿革”开始线性推进；跳章用 `#JUMP`。
+4) 中间章节写完后再 `#FIX`；最后 `#FILL` 回填“投资要点概览”和“来源清单”。
+5) 用 `#CHECK` 做一致性检查。
+
+### 用 render 导出 HTML / PDF / Word（可选）
+
+> ***Markdown（.md文件）可以用Chrome（需安装Markdown Viewer扩展程序）打开查看，然后用打印成PDF，`render`脚本可不用。***
+
+```bash
+python utils/render.py Reports/<TICKER>/<公司名>全貌梳理.md
+```
+
+---
+
+## 路径 B：Codex CLI 自动写作
+
+### 可直接用TICKER自动写作：
+```bash
+python utils/run_qual_report_codex.py --ticker <TICKER>
+```
+
+也可获取材料到本机后用材料写作，理论上速度会更快。  
+
+### 获取材料
+
+可选两类材料来源：
+- 美股/SEC：下载 filings（见【脚本参数说明】 `fetch_sec_edgar`）
+- PDF：可直接用原 PDF，或先处理成 LLM ready，建议处理。
+
+### 可选：PDF 处理成 LLM ready（Marker / MinerU）
+
+适合：PDF 规模大、结构复杂、需要更稳定的章节检索与引用。
+
+输入：PDF  
+输出：LLM ready的材料库  
+示例（MinerU）：
+```bash
+python utils/mineru_extract.py --base /path/to/pdfs --output output/<base目录名>
+```
+
+### 可选：构建材料索引（manifest/toc）
+
+当材料库规模很大（例如上千文件）时，建议构建索引并按章拼包。
+输入：LLM ready的材料库  
+输出：材料库  索引  
+示例（MinerU）：
+```bash
+python utils/build_mineru_manifest.py --base output/<base目录名>
+```
+
+### 运行 Codex CLI 自动写作
+
+从[GUIDE.md](GUIDE.md) 生成prompts：
+```bash
+python utils/sync_codex_from_guide.py
+```
+
+直接从filings或PDF开始写作：  
+```bash
+python utils/run_qual_report_codex.py --base filings/<TICKER> --ticker <TICKER>
+```
+
+从材料库开始写作：  
+> 如果未显式传 `--materials-index`，脚本会自动检查 `--base/index` 是否存在索引并使用它。
+```bash
+python utils/run_qual_report_codex.py --base output/<base目录名>
+```
+
+从材料库 + 索引开始写作：  
+```bash
+python utils/run_qual_report_codex.py --base output/<base目录名> --materials-index output/<base目录名>/index
+```
+
+
+当章节审计失败触发重试时，脚本会自动扩大该章材料包（提高 `top_k` 与 `max_total_chars`）并重写。
+
+产物与日志：
+- 报告：`Reports/<TICKER>/<公司名>全貌梳理.md`
+- 章节：`Reports/<TICKER>/chapters/`
+- 日志：`Reports/<TICKER>/_codex_logs/`
+
+### 用 render 导出 HTML / PDF / Word
+
+```bash
+python utils/render.py Reports/<TICKER>/<公司名>全貌梳理.md
+```
+
+---
+
+## 脚本参数说明
+
+### fetch_sec_edgar
+脚本：`utils/fetch_sec_edgar.py`
+
+常用参数：
+- `--ticker`：股票代码（必填）
+- `--form`：表单类型（可多填，如 `10-K 10-Q`）
+- `--start`：起始日期（必填；支持 YYYY / YYYY-MM / YYYY-MM-DD）
+- `--end`：结束日期（可选；支持 YYYY / YYYY-MM / YYYY-MM-DD；默认今天）
+- `--output`：输出目录（可选，默认 `./filings`）
+
+重要说明：
+- SEC 要求 User-Agent 标识身份，请在环境变量中设置：
+	```bash
+	export SEC_USER_AGENT="Your Name your@email.com"
+	```
+- 输出目录结构形如：`filings/<TICKER>/<FORM>_<DATE>_report_<REPORT_DATE>_<ACCESSION>/`。
+
+### mineru_extract
+脚本：`utils/mineru_extract.py`
+
+参数：
+- `--filing`：单个 PDF 文件路径（与 `--base` 互斥）
+- `--base`：PDF 目录（递归扫描 .pdf，与 `--filing` 互斥）
+- `--output`：输出目录（默认 `./output`）
+- `--ocr`：启用 OCR（默认关闭）
+- `--html`：导出 HTML（`extra_formats=["html"]`）
+- `--sleep`：轮询间隔秒数（默认 30）
+- `--timeout`：轮询超时秒数（默认 1200；实际总超时 = `timeout * 文件数`）
+
+### build_mineru_manifest
+脚本：`utils/build_mineru_manifest.py`
+
+用途：把 MinerU 输出目录（大量文件）构建成可检索的 `manifest.jsonl/manifest.tsv`，供后续按章节选 Top-K chunks。
+
+参数：
+- `--base`：MinerU 输出根目录（例如 `output/0883`）
+- `--output`：索引输出目录（可选；默认 `<base>/index`）
+- `--chunk-chars`：chunk 大小（字符数；默认取环境变量 `MINERU_CHUNK_CHARS`，否则 1800）
+- `--include-doc-records`：在 `manifest.jsonl` 中额外写入 doc 级记录（可选）
+- `--max-docs`：仅处理前 N 份文档（调试用；0 表示不限制）
+- `--write-toc`：生成一个 `toc.md` 骨架（默认开启；仅当 `toc.md` 不存在时写入）
+- `--no-write-toc`：关闭 `toc.md` 生成
+
+### marker_extract
+脚本：`utils/marker_extract.py`
+
+参数：
+- `--filing`：单个 PDF 文件路径（与 `--base` 互斥）
+- `--base`：PDF 目录（仅当前目录下 .pdf）
+- `--output`：输出目录（默认 `./output`）
+- `--ollama`：启用本地 Ollama
+- `--model`：Ollama 模型名（默认 `deepseek-r1:8b`）
+
+### run_qual_report_codex
+脚本：`utils/run_qual_report_codex.py`
+
+参数：
+- `--base`：材料目录（单一公司；可选，不提供则表示不使用本地材料）
+- `--ticker`：股票代码（可选但推荐；用于默认 base 与校验）
+- `--company`：公司名（可选，覆盖自动识别）
+- `--only-chapters`：只写指定章节（可重复或逗号分隔）
+- `--max-attempts`：每章最大尝试次数（默认 2）
+- `--profile`：执行档位（fast/balanced/high/deep）
+- `--verbose`：打印 Codex 最终输出
+- `--dry-run`：只打印计划不执行
+- `--overview-input`：overview 输入范围（condensed/full）
+- `--no-check`：关闭最终一致性检查
+
+### render
+脚本：`utils/render.py`
+
+参数：
+- `<input_markdown>`：输入 Markdown（必填）
+- `[output_path]`：输出路径（可选；扩展名决定格式：html/pdf/docx）
+
+运行时依赖：
+- `pandoc`（带 Lua filter 支持）
+- `python3`（用于 HTML 后处理：CSS 内联、图片宽度限制）
+- Google Chrome（PDF 导出时 headless 打印）
+
+macOS 通常需要配置：
+```bash
+export PUPPETEER_EXECUTABLE_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+```
+

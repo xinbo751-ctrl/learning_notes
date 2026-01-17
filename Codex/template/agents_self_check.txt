@@ -1,0 +1,1 @@
+Print the exact SENTINEL line you see in the currently effective instructions; if not found print SENTINEL_NOT_FOUND. Output plain text.

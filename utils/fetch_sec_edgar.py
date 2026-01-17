@@ -35,7 +35,7 @@ BROWSE_EDGAR_TEMPLATE = (
 )
 
 DEFAULT_SLEEP_SEC = 0.2
-DEFAULT_USER_AGENT = "Leo Liu leo@dayu.fund"
+DEFAULT_USER_AGENT = "Your Name your@email.com"
 DEFAULT_OUT_DIR = "./filings"
 
 MAX_TIMEOUT_RETRIES = 3
@@ -327,6 +327,10 @@ def normalize_form(form: str) -> str:
         return "10-K"
     if f == "10Q":
         return "10-Q"
+    if f == "8K":
+        return "8-K"
+    if f in ("8K/A", "8KA"):
+        return "8-K/A"
     if f == "6K":
         return "6-K"
     if f == "20F":
@@ -423,7 +427,7 @@ def main():
     )
     ap.add_argument("--start", required=True, help="Start filing date (YYYY-MM-DD), inclusive")
     ap.add_argument("--end", help="End filing date (YYYY-MM-DD), inclusive. Defaults to today if not specified.")
-    ap.add_argument("--out", default=DEFAULT_OUT_DIR, help=f"Output directory (default: {DEFAULT_OUT_DIR})")
+    ap.add_argument("--output", default=DEFAULT_OUT_DIR, help=f"Output directory (default: {DEFAULT_OUT_DIR})")
     ap.add_argument(
         "--user-agent",
         dest="user_agent",
@@ -438,6 +442,14 @@ def main():
         "--overwrite",
         action="store_true",
         help="Force overwrite existing files. If False, check remote file status via HTTP HEAD request."
+    )
+    ap.add_argument(
+        "--no-xbrl",
+        action="store_true",
+        help=(
+            "Skip index.json probing and do not download extracted XBRL instance XML / taxonomy / exhibits. "
+            "Still downloads the primary HTML and writes meta.json. Useful for forms like 8-K where XBRL may be absent."
+        ),
     )
     args = ap.parse_args()
 
@@ -462,7 +474,7 @@ def main():
     cik10 = cik_to_10digits(cik)
 
     forms = [normalize_form(f) for f in args.form]
-    allowed_forms = {"10-Q", "10-K", "6-K", "20-F"}
+    allowed_forms = {"10-Q", "10-K", "8-K", "8-K/A", "6-K", "20-F"}
     bad = [f for f in forms if f not in allowed_forms]
     if bad:
         raise SystemExit(f"Error: unsupported --form value(s): {bad}. Allowed: {sorted(allowed_forms)}")
@@ -491,7 +503,7 @@ def main():
         ),
     )
 
-    out_base = Path(args.out).expanduser().resolve()
+    out_base = Path(args.output).expanduser().resolve()
     out_base.mkdir(parents=True, exist_ok=True)
 
     cik_int = str(int(cik))  # strip leading zeros for archive path
@@ -545,112 +557,114 @@ def main():
 
         time.sleep(args.sleep)
 
-        # Extracted instance XML and exhibits
         extracted_name = None
         taxonomy_files = {}
         exhibit_files = []
-        try:
-            idx = http_get_json(index_json_url, headers=headers)
-            items = idx.get("directory", {}).get("item", []) or []
-            extracted_name = pick_extracted_instance_xml(items)
-            taxonomy_files = pick_taxonomy_files(items)
-            # For 6-K filings, also get exhibit files (EX-99.1, EX-99.2, etc.)
-            if filing_form == "6-K":
-                exhibit_files = pick_exhibit_files(items)
-        except Exception as e:
-            print(f"[warn] failed to read index.json {index_json_url}: {e}")
-            download_failures.append(
-                {
-                    "form": filing_form,
-                    "filingDate": str(filing_date),
-                    "reportDate": str(report_date),
-                    "accession": str(acc),
-                    "type": "INDEX_JSON",
-                    "name": "index.json",
-                    "url": str(index_json_url),
-                    "error": str(e),
-                }
-            )
 
-        time.sleep(args.sleep)
+        if not args.no_xbrl:
+            # Extracted instance XML and exhibits
+            try:
+                idx = http_get_json(index_json_url, headers=headers)
+                items = idx.get("directory", {}).get("item", []) or []
+                extracted_name = pick_extracted_instance_xml(items)
+                taxonomy_files = pick_taxonomy_files(items)
+                # For 6-K filings, also get exhibit files (EX-99.1, EX-99.2, etc.)
+                if filing_form == "6-K":
+                    exhibit_files = pick_exhibit_files(items)
+            except Exception as e:
+                print(f"[warn] failed to read index.json {index_json_url}: {e}")
+                download_failures.append(
+                    {
+                        "form": filing_form,
+                        "filingDate": str(filing_date),
+                        "reportDate": str(report_date),
+                        "accession": str(acc),
+                        "type": "INDEX_JSON",
+                        "name": "index.json",
+                        "url": str(index_json_url),
+                        "error": str(e),
+                    }
+                )
 
-        if extracted_name:
-            xml_url = filing_dir_url + extracted_name
-            xml_out = out_dir / extracted_name
-            if should_download(xml_url, headers, xml_out, args.overwrite):
-                try:
-                    http_download(xml_url, headers=headers, out_path=xml_out)
-                    print(f"[ok] XBRL instance XML: {extracted_name}")
-                except Exception as e:
-                    print(f"[warn] failed to download XML {xml_url}: {e}")
-                    download_failures.append(
-                        {
-                            "form": filing_form,
-                            "filingDate": str(filing_date),
-                            "reportDate": str(report_date),
-                            "accession": str(acc),
-                            "type": "XBRL_INSTANCE_XML",
-                            "name": str(extracted_name),
-                            "url": str(xml_url),
-                            "error": str(e),
-                        }
-                    )
-            else:
-                print(f"[skip] XBRL instance XML: {extracted_name}")
-        else:
-            print("[warn] no extracted *_htm.xml found in index.json")
-
-        # Download taxonomy files
-        for tax_type, tax_name in taxonomy_files.items():
-            tax_url = filing_dir_url + tax_name
-            tax_out = out_dir / tax_name
-            if should_download(tax_url, headers, tax_out, args.overwrite):
-                try:
-                    http_download(tax_url, headers=headers, out_path=tax_out)
-                    print(f"[ok] {tax_type.capitalize()} linkbase: {tax_name}")
-                except Exception as e:
-                    print(f"[warn] failed to download {tax_type} {tax_url}: {e}")
-                    download_failures.append(
-                        {
-                            "form": filing_form,
-                            "filingDate": str(filing_date),
-                            "reportDate": str(report_date),
-                            "accession": str(acc),
-                            "type": f"TAXONOMY_{tax_type.upper()}",
-                            "name": str(tax_name),
-                            "url": str(tax_url),
-                            "error": str(e),
-                        }
-                    )
-            else:
-                print(f"[skip] {tax_type.capitalize()} linkbase: {tax_name}")
             time.sleep(args.sleep)
 
-        # Download exhibit files (for 6-K filings)
-        for exhibit_name in exhibit_files:
-            exhibit_url = filing_dir_url + exhibit_name
-            exhibit_out = out_dir / exhibit_name
-            if should_download(exhibit_url, headers, exhibit_out, args.overwrite):
-                try:
-                    http_download(exhibit_url, headers=headers, out_path=exhibit_out)
-                    print(f"[ok] Exhibit: {exhibit_name}")
-                except Exception as e:
-                    print(f"[warn] failed to download exhibit {exhibit_url}: {e}")
-                    download_failures.append(
-                        {
-                            "form": filing_form,
-                            "filingDate": str(filing_date),
-                            "reportDate": str(report_date),
-                            "accession": str(acc),
-                            "type": "EXHIBIT",
-                            "name": str(exhibit_name),
-                            "url": str(exhibit_url),
-                            "error": str(e),
-                        }
-                    )
+            if extracted_name:
+                xml_url = filing_dir_url + extracted_name
+                xml_out = out_dir / extracted_name
+                if should_download(xml_url, headers, xml_out, args.overwrite):
+                    try:
+                        http_download(xml_url, headers=headers, out_path=xml_out)
+                        print(f"[ok] XBRL instance XML: {extracted_name}")
+                    except Exception as e:
+                        print(f"[warn] failed to download XML {xml_url}: {e}")
+                        download_failures.append(
+                            {
+                                "form": filing_form,
+                                "filingDate": str(filing_date),
+                                "reportDate": str(report_date),
+                                "accession": str(acc),
+                                "type": "XBRL_INSTANCE_XML",
+                                "name": str(extracted_name),
+                                "url": str(xml_url),
+                                "error": str(e),
+                            }
+                        )
+                else:
+                    print(f"[skip] XBRL instance XML: {extracted_name}")
             else:
-                print(f"[skip] Exhibit: {exhibit_name}")
-            time.sleep(args.sleep)
+                print("[warn] no extracted *_htm.xml found in index.json")
+
+            # Download taxonomy files
+            for tax_type, tax_name in taxonomy_files.items():
+                tax_url = filing_dir_url + tax_name
+                tax_out = out_dir / tax_name
+                if should_download(tax_url, headers, tax_out, args.overwrite):
+                    try:
+                        http_download(tax_url, headers=headers, out_path=tax_out)
+                        print(f"[ok] {tax_type.capitalize()} linkbase: {tax_name}")
+                    except Exception as e:
+                        print(f"[warn] failed to download {tax_type} {tax_url}: {e}")
+                        download_failures.append(
+                            {
+                                "form": filing_form,
+                                "filingDate": str(filing_date),
+                                "reportDate": str(report_date),
+                                "accession": str(acc),
+                                "type": f"TAXONOMY_{tax_type.upper()}",
+                                "name": str(tax_name),
+                                "url": str(tax_url),
+                                "error": str(e),
+                            }
+                        )
+                else:
+                    print(f"[skip] {tax_type.capitalize()} linkbase: {tax_name}")
+                time.sleep(args.sleep)
+
+            # Download exhibit files (for 6-K filings)
+            for exhibit_name in exhibit_files:
+                exhibit_url = filing_dir_url + exhibit_name
+                exhibit_out = out_dir / exhibit_name
+                if should_download(exhibit_url, headers, exhibit_out, args.overwrite):
+                    try:
+                        http_download(exhibit_url, headers=headers, out_path=exhibit_out)
+                        print(f"[ok] Exhibit: {exhibit_name}")
+                    except Exception as e:
+                        print(f"[warn] failed to download exhibit {exhibit_url}: {e}")
+                        download_failures.append(
+                            {
+                                "form": filing_form,
+                                "filingDate": str(filing_date),
+                                "reportDate": str(report_date),
+                                "accession": str(acc),
+                                "type": "EXHIBIT",
+                                "name": str(exhibit_name),
+                                "url": str(exhibit_url),
+                                "error": str(e),
+                            }
+                        )
+                else:
+                    print(f"[skip] Exhibit: {exhibit_name}")
+                time.sleep(args.sleep)
 
         # Metadata
         meta = {

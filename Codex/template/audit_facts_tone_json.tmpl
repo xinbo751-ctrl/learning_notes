@@ -1,0 +1,41 @@
+#ASK
+目标：审计本章是否违反硬约束【事实与语气】2（2 + 2.1–2.6）及证据充分性（0.1–0.3）。仅输出审计结果 JSON，不要改写正文，不要输出其它文字。
+
+注意：本审计采用【适度放宽】口径以避免过度拦截写作流程，但仍必须抓住高风险违规。
+判定规则（用于设置 pass）：
+- 若 rule 0.1–0.3 任何一条命中，则 pass=false。
+- 若存在至少 1 条 severity=high 的违规，则 pass=false。
+- 若 severity=medium 的违规条数 >= 2，则 pass=false。
+- 若 rule 2.4 的违规条数 >= 2，则 pass=false。
+- 否则 pass=true，并照样列出 violations 供后续修正。
+severity 由你基于协议风险自行判断（high/medium/low）。
+
+输出必须是以下 JSON 结构（字段齐全）：
+{
+  "pass": true/false,
+  "class": "ok|evidence_insufficient|style_violation",
+  "violations": [
+    {
+      "rule": "0.1|0.2|0.3|$RULES_JOINED",
+      "severity": "high|medium|low",
+      "excerpt": "从本章原文复制的触发片段（尽量短）",
+      "reason": "为什么违反/高风险（按协议口径解释）",
+      "rewrite_hint": "如何改成合规表述（不引入新事实；必要时建议挪到证据与出处）"
+    }
+  ],
+  "notes": ["可选：整体风险提示"]
+}
+
+class 说明：
+- evidence_insufficient：出现 0.1/0.2/0.3 任一违规
+- style_violation：仅出现 2/2.1–2.6 的违规且 pass=false
+- ok：pass=true
+
+审计口径（逐条检查 0.1–0.3 + 2 + 2.1–2.6）：
+0.1) 大量【占位符】/“未披露”/泛化描述导致信息无法闭环。（命中则列出片段）
+0.2) “证据与出处”缺失或为空。（命中则列出片段）
+0.3) 正文存在多条断言但无可对应的证据条目。（命中则列出片段）
+$AUDIT_BLOCK
+
+以下为本章正文（待审计）：
+{{CHAPTER_MARKDOWN}}

@@ -1,0 +1,23 @@
+#WRITE
+目标章节：{{CHAPTER_TITLE}}
+
+任务：核实事实并完善该章节。优先使用本地材料作为来源范围，并按来源优先级执行（用户上传材料优先）。
+
+材料范围与使用顺序（重要）：
+- Materials packs：若提供了按章节构建的材料包，优先使用该材料包。
+- Base packs (fallback)：仅在 Materials packs 不足以支撑“证据与出处”时，才遍历 Base packs 下的材料补齐证据（若 Base packs 的 Location 为 (none) 则跳过）。
+- 联网检索：若本地材料不足，可通过 SEC EDGAR 联网检索公司披露文件；也可使用其它公开网页资料，但必须在“证据与出处”中给出可追溯 URL。
+- 当 Materials packs 和 Base packs 都为 (none) 且已提供 ticker 时，必须以 ticker 主动检索 SEC EDGAR 作为最小输入条件，禁止输出“缺口清单/未满足最小输入条件”。
+
+公司名字：{{COMPANY}}
+TICKER：{{TICKER}}
+
+要求：
+- 输出仅包含该章节正文（从“## {{CHAPTER_TITLE}}”到该章结束），不要输出其它解释文字。
+- 严格遵守硬约束（尤其是【事实与语气】2–2.8 与条件项裁剪规则）。
+
+以下为该章节模板骨架（供你保留结构并填充内容；不要输出其中的 HTML 注释）：
+{{CHAPTER_SKELETON}}
+
+以下为材料清单（供快速浏览；可能同时包含 Materials packs 与 Base packs 两部分）：
+{{MATERIALS_MANIFEST}}

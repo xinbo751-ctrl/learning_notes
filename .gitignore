@@ -11,4 +11,11 @@ output/
 .obsidian/
 tests/screen/
 *.diff
-*.diff.bak
+*.bak
+AGENTS.md
+Codex/_protocol_from_guide.txt
+Codex/prompts/
+_codex_logs/
+Reports/*/chapters/
+Reports/*/_*
+Reports/_infer/

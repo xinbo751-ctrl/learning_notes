@@ -2,13 +2,19 @@
 
 set -euo pipefail
 
-SCRIPT_PATH="$0"
-if [ "${SCRIPT_PATH%/*}" != "$SCRIPT_PATH" ]; then
-	SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
-else
-	SCRIPT_DIR="$PWD"
+SCRIPT_PATH="${BASH_SOURCE[0]:-$0}"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+
+REPO_ROOT=""
+if command -v git >/dev/null 2>&1; then
+	REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)"
 fi
-cd "$SCRIPT_DIR"
+
+if [ -z "$REPO_ROOT" ]; then
+	REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
+
+cd "$REPO_ROOT"
 
 if [ $# -lt 1 ]; then
 	echo "Usage: $0 <input_markdown> [output_html]" >&2

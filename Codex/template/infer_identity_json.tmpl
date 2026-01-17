@@ -1,0 +1,30 @@
+#ASK
+目标：从本地材料推断股票代码（ticker）与公司名字（company），并在输入中提供 expected_ticker 时验证材料是否属于该 ticker。
+
+输出必须是 JSON-only，不要输出其它文字。
+
+输出 JSON 结构（字段齐全）：
+{
+  "ticker": "大写股票代码（如 V）",
+  "company": "公司名称（优先中文，若材料仅有英文则用英文；不加多余后缀）",
+  "confidence": "high|medium|low",
+  "basis": ["用于推断的证据要点（简短）"],
+  "base_matches_ticker": true/false/null,
+  "mismatch_reason": "若不匹配则说明原因，否则为空字符串"
+}
+
+推断规则：
+- 只基于下方提供的本地材料证据（文件路径、片段、manifest）。
+- 若输入提供了 expected_ticker，则必须判断“base_packs_location目录下的本地材料是否对应该 ticker 的公司”，并在 base_matches_ticker 中给出 true/false；若无法判断则为 null。
+- 若公司多地上市，则获取到的多个ticker中任意一个匹配expected_ticker即可。
+- ticker 输出必须为大写字母/数字的简短代码（不含交易所后缀）。
+
+输入：
+expected_ticker: {{EXPECTED_TICKER}}
+base_packs_location: {{BASE_DIR_NAME_HINT}}
+
+materials_manifest:
+{{MATERIALS_MANIFEST}}
+
+evidence:
+{{EVIDENCE_TEXT}}

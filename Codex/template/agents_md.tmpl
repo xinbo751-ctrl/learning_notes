@@ -1,0 +1,19 @@
+# Company Qualitative Report Automation (Codex)
+
+$SENTINEL_LINE
+
+This file is generated from [GUIDE.md](GUIDE.md). Do not edit by hand.
+Regenerate via: `python utils/sync_codex_from_guide.py`
+
+If you are not following the protocol below, stop and re-align.
+
+## Protocol (authoritative; synced from GUIDE.md)
+
+```text
+$PROTOCOL_TEXT```
+
+## Automation Output Rules
+
+- For write-like commands (`#WRITE/#JUMP/#FIX/#FILL`): output exactly ONE Markdown code block.
+  - The code block content must ONLY be the target chapter Markdown, starting at `## <章节标题>` and ending at the end of that chapter.
+- For audit-like commands (`#ASK`): output ONLY the requested JSON (no extra text).
